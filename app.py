@@ -2,18 +2,19 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS # CORS 추가
 import cv2
-import dlib
 import numpy as np
 import base64
 import io
 from PIL import Image
 import random
+import mediapipe as mp # mediapipe import
 
 app = Flask(__name__)
 CORS(app) # ◀◀ 2. 이 줄이 있는지 확인!
 # dlib 얼굴 탐지기와 랜드마크 예측기 초기화
-detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+# Mediapipe 얼굴 인식 모델 초기화
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1, min_detection_confidence=0.5)
 
 # 콘텐츠 라이브러리
 content_library = {
@@ -64,42 +65,41 @@ def get_kkondae_level(score):
 
 def analyze_face(image):
     """
-    얼굴 이미지를 분석하여 꼰대력 점수를 계산하는 함수 (최종 완성 버전)
+    얼굴 이미지를 분석하여 꼰대력 점수를 계산하는 함수 (Mediapipe 버전)
     """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    faces = detector(gray)
+    # Mediapipe는 RGB 이미지를 사용
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    results = face_mesh.process(image_rgb)
 
-    if len(faces) == 0:
+    if not results.multi_face_landmarks:
         return None, "얼굴을 찾을 수 없어요. 더 정면으로 찍은 사진을 올려보세요!"
 
-    face = faces[0]
-    landmarks = predictor(gray, face)
+    face_landmarks = results.multi_face_landmarks[0]
+    
+    # 랜드마크 좌표를 numpy 배열로 변환
+    h, w, _ = image.shape
+    coords = np.array([(lm.x * w, lm.y * h) for lm in face_landmarks.landmark])
 
-    coords = np.array([[p.x, p.y] for p in landmarks.parts()])
-
-    # 1. 입꼬리 각도 계산
-    mouth_center_top = coords[62]
-    mouth_center_bottom = coords[66]
-    mouth_center = (mouth_center_top + mouth_center_bottom) / 2
-    left_corner = coords[48]
-    right_corner = coords[54]
-
+    # 1. 입꼬리 각도 계산 (Mediapipe 인덱스 사용)
+    left_corner = coords[61]
+    right_corner = coords[291]
+    mouth_center = coords[13]
+    
     angle_left = np.arctan2(left_corner[1] - mouth_center[1], left_corner[0] - mouth_center[0])
     angle_right = np.arctan2(right_corner[1] - mouth_center[1], right_corner[0] - mouth_center[0])
-
     mouth_angle_deg = np.degrees(angle_left + (np.pi - angle_right)) / 2
-    # 1번 예시에서 40점, 2번 예시에서 0점이 나오도록 고정
-    mouth_score = int(max(0, min(40, (175 - mouth_angle_deg) * 8)))
+    mouth_score = int(max(0, min(40, (mouth_angle_deg - 5) * 10)))
 
     # 2. 미간 사이 거리 계산
-    eyebrow_left = coords[21]
-    eyebrow_right = coords[22]
-    face_width = np.linalg.norm(coords[0] - coords[16])
+    eyebrow_left = coords[285]
+    eyebrow_right = coords[55]
+    face_left = coords[234]
+    face_right = coords[454]
+    face_width = np.linalg.norm(face_left - face_right)
     eyebrow_dist = np.linalg.norm(eyebrow_left - eyebrow_right)
-
+    
     eyebrow_ratio = eyebrow_dist / face_width
-    # 1번 예시에서 35점, 2번 예시에서 0점이 나오도록 고정
-    eyebrow_score = int(max(0, min(35, (0.17 - eyebrow_ratio) * 1000)))
+    eyebrow_score = int(max(0, min(35, (0.13 - eyebrow_ratio) * 2000)))
 
     # 3. 눈을 뜬 정도 계산
     def eye_aspect_ratio(eye_coords):
@@ -109,34 +109,23 @@ def analyze_face(image):
         ear = (A + B) / (2.0 * C)
         return ear
 
-    left_ear = eye_aspect_ratio(coords[36:42])
-    right_ear = eye_aspect_ratio(coords[42:48])
+    # 왼쪽 눈(33, 160, 158, 133, 153, 144), 오른쪽 눈(362, 385, 387, 263, 373, 380)
+    left_eye = np.array([coords[33], coords[160], coords[158], coords[133], coords[153], coords[144]])
+    right_eye = np.array([coords[362], coords[385], coords[387], coords[263], coords[373], coords[380]])
+    left_ear = eye_aspect_ratio(left_eye)
+    right_ear = eye_aspect_ratio(right_eye)
     avg_ear = (left_ear + right_ear) / 2.0
-
-    # 1번 예시에서 19점, 2번 예시에서 1점이 나오도록 최종 타겟팅
-    eye_score = int(max(0, min(25, (avg_ear - 0.32) * 320)))
+    eye_score = int(max(0, min(25, (0.30 - avg_ear) * 1000)))
 
     # 최종 점수 계산 및 랜덤 변수 적용
     deterministic_score = mouth_score + eyebrow_score + eye_score
-
     variation_range = int(deterministic_score * 0.05)
     variation = random.randint(-variation_range, variation_range)
     total_score = deterministic_score + variation
-
     total_score = max(0, min(100, total_score))
-    
-    print("\n--- DEBUGGING ---")
-    print(f"Raw Mouth Angle: {mouth_angle_deg:.2f} | (기준: 175, 민감도: 8, 로직:감소)")
-    print(f"Raw Eyebrow Ratio: {eyebrow_ratio:.4f} | (기준: 0.17, 민감도: 1000)")
-    print(f"Raw Eye Aspect Ratio: {avg_ear:.4f} | (기준: 0.39, 민감도: 550)")
-    print("--- SCORES ---")
-    print(f"Mouth Score: {mouth_score}")
-    print(f"Eyebrow Score: {eyebrow_score}")
-    print(f"Eye Score: {eye_score}")
-    print(f">>> Total Score: {total_score}")
-    print("-----------------\n")
 
     return total_score, None
+
 
 
 @app.route('/analyze', methods=['POST'])
