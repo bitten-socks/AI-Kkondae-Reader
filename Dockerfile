@@ -4,8 +4,10 @@ FROM python:3.12-slim
 # 2. 작업 디렉토리 설정
 WORKDIR /app
 
+# ✨ 시스템 라이브러리 설치 코드 추가! ✨
+RUN apt-get update && apt-get install -y libgl1-mesa-glx && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # 3. requirements.txt 복사 및 라이브러리 설치
-# (이 단계에서 opencv-python-headless가 설치되어 시스템 라이브러리가 필요 없음)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
