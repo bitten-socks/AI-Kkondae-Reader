@@ -1,6 +1,6 @@
 
 from flask import Flask, request, jsonify
-from flask_cors import CORS # CORS 추가
+# from flask_cors import CORS # CORS 추가
 import cv2
 import numpy as np
 import base64
@@ -10,7 +10,14 @@ import random
 import mediapipe as mp # mediapipe import
 
 app = Flask(__name__)
-CORS(app, resources={r"/analyze*": {"origins": "*"}})
+# CORS(app, resources={r"/analyze*": {"origins": "*"}})
+
+@app.after_request
+def after_request(response):
+  response.headers.add('Access-Control-Allow-Origin', '*')
+  response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+  response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  return response
 # dlib 얼굴 탐지기와 랜드마크 예측기 초기화
 # Mediapipe 얼굴 인식 모델 초기화
 mp_face_mesh = mp.solutions.face_mesh
