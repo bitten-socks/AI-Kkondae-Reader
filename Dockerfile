@@ -5,6 +5,8 @@ FROM python:3.12
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
+    build-essential \
+    cmake \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 3. 작업 디렉토리 설정
