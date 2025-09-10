@@ -10,7 +10,7 @@ import random
 import mediapipe as mp # mediapipe import
 
 app = Flask(__name__)
-CORS(app) # ◀◀ 2. 이 줄이 있는지 확인!
+CORS(app, resources={r"/analyze*": {"origins": "*"}})
 # dlib 얼굴 탐지기와 랜드마크 예측기 초기화
 # Mediapipe 얼굴 인식 모델 초기화
 mp_face_mesh = mp.solutions.face_mesh
