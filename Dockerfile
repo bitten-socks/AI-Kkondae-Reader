@@ -1,17 +1,8 @@
-# 1. 베이스 이미지: Python 3.12 슬림 버전 사용
+# 1. 베이스 이미지: Cloudtype가 이 부분을 자체 이미지로 대체합니다.
 FROM python:3.12
 
 # 2. 작업 디렉토리 설정
 WORKDIR /app
-
-# OpenCV에 필요한 모든 시스템 라이브러리를 설치
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 3. requirements.txt 복사 및 라이브러리 설치
 COPY requirements.txt .
