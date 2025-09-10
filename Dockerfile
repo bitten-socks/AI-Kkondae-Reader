@@ -1,9 +1,9 @@
 # 1. 베이스 이미지: 모든 라이브러리가 포함된 표준 Python 이미지 사용
 FROM python:3.12
 
-# 2. 시스템 라이브러리 설치: OpenCV가 필요로 하는 모든 의존성을 직접 설치
+# 2. 시스템 라이브러리 설치: 바뀐 이름으로 수정!
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
