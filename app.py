@@ -6,7 +6,7 @@ import dlib
 import numpy as np
 import base64
 import io
-from PIL import Image
+from PIL import Image, ExifTags
 import random
 
 app = Flask(__name__)
@@ -49,7 +49,31 @@ content_library = {
     }
 }
 
+def autorotate_image(image):
+    try:
+        # 이미지의 EXIF 태그에서 Orientation 정보 찾기
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == 'Orientation':
+                break
+        
+        exif = image._getexif()
 
+        if exif is not None:
+            exif_orientation = exif.get(orientation)
+            
+            if exif_orientation == 3:
+                image = image.rotate(180, expand=True)
+            elif exif_orientation == 6:
+                image = image.rotate(270, expand=True)
+            elif exif_orientation == 8:
+                image = image.rotate(90, expand=True)
+
+    except (AttributeError, KeyError, IndexError):
+        # EXIF 정보가 없는 경우
+        pass
+    
+    return image
+# -------------------------
 def get_kkondae_level(score):
     if 0 <= score <= 20:
         return 1
@@ -143,6 +167,12 @@ def analyze():
     image_data = base64.b64decode(encoded)
     image_stream = io.BytesIO(image_data)
     pil_image = Image.open(image_stream)
+        # --- 자동 회전 코드 호출 ---
+    pil_image = autorotate_image(pil_image)
+
+    if pil_image.mode in ("RGBA", "P"):
+        pil_image = pil_image.convert("RGB")
+    # -------------------------
     
     # OpenCV에서 처리할 수 있는 포맷으로 변경
     cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
